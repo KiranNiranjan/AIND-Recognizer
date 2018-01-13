@@ -9,9 +9,9 @@ from asl_utils import combine_sequences
 
 
 class ModelSelector(object):
-    '''
+    """
     base class for model selection (strategy design pattern)
-    '''
+    """
 
     def __init__(self, all_word_sequences: dict, all_word_Xlengths: dict, this_word: str,
                  n_constant=3,
@@ -76,34 +76,96 @@ class SelectorBIC(ModelSelector):
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on BIC scores
-        raise NotImplementedError
+        max_components = self.min_n_components
+        max_bic = math.inf
+
+        for i in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                model = GaussianHMM(n_components=i, n_iter=1000, random_state=self.random_state) \
+                    .fit(self.X, self.lengths)
+                log_l = model.score(self.X, self.lengths)
+
+                n_data_points = len(self.X)
+                n_features = len(self.X[0])
+                p = (i ** 2) + (2 * n_features * i) - 1
+
+                # BIC = -2 * logL + p * logN
+                bic = (-2) * log_l + p * math.log(n_data_points)
+
+                if bic < max_bic:
+                    max_bic = bic
+                    max_components = i
+            except:
+                continue
+
+        return self.base_model(max_components)
 
 
 class SelectorDIC(ModelSelector):
-    ''' select best model based on Discriminative Information Criterion
+    """ select best model based on Discriminative Information Criterion
 
     Biem, Alain. "A model selection criterion for classification: Application to hmm topology optimization."
     Document Analysis and Recognition, 2003. Proceedings. Seventh International Conference on. IEEE, 2003.
     http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.58.6208&rep=rep1&type=pdf
     https://pdfs.semanticscholar.org/ed3d/7c4a5f607201f3848d4c02dd9ba17c791fc2.pdf
     DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
-    '''
+    """
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+        max_components = self.min_n_components
+        max_dic = -math.inf
+
+        for i in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                model = GaussianHMM(n_components=i, n_iter=1000, random_state=self.random_state) \
+                    .fit(self.X, self.lengths)
+                this_word_score = model.score(self.X, self.lengths)
+
+                word_score = 0
+                for key, (X, lenghts) in self.hwords.items():
+                    if key == self.this_word:
+                        continue
+                    word_score += model.score(X, lenghts)
+                dic = abs(this_word_score - (1 / (len(self.hwords) - 1) * word_score))
+
+                if dic > max_dic:
+                    max_dic = dic
+                    max_components = i
+            except:
+                continue
+
+        return self.base_model(max_components)
 
 
 class SelectorCV(ModelSelector):
-    ''' select best model based on average log Likelihood of cross-validation folds
+    """ select best model based on average log Likelihood of cross-validation folds
 
-    '''
+    """
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection using CV
-        raise NotImplementedError
+        max_components = self.min_n_components
+        max_score = -math.inf
+
+        for i in range(self.min_n_components, self.max_n_components + 1):
+            split_method = KFold(random_state=self.random_state)
+            try:
+                for train_idx, text_idx in split_method.split(self.sequences):
+                    x_train, lengths_train = combine_sequences(train_idx, self.sequences)
+                    x_test, lengths_test = combine_sequences(text_idx, self.sequences)
+
+                    model = GaussianHMM(n_components=i, n_iter=1000, random_state=self.random_state) \
+                        .fit(x_train, lengths_train)
+                    log_l = model.score(x_test, lengths_test)
+
+                    if log_l > max_score:
+                        max_score = log_l
+                        max_components = i
+
+            except:
+                continue
+
+        return self.base_model(max_components)
