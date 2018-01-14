@@ -128,7 +128,7 @@ class SelectorDIC(ModelSelector):
                     if key == self.this_word:
                         continue
                     word_score += model.score(X, lenghts)
-                dic = abs(this_word_score - (1 / (len(self.hwords) - 1) * word_score))
+                dic = this_word_score - (1 / (len(self.hwords) - 1) * word_score)
 
                 if dic > max_dic:
                     max_dic = dic
